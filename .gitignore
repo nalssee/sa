@@ -1,0 +1,10 @@
+__pycache__
+sa-samples/
+papers/
+workspace/
+venv/
+software/
+firstnames
+ticker_symbols
+results
+dictionary
