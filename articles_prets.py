@@ -116,8 +116,8 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
         order by tsymbol, date
     """, group='tsymbol')
 
+    c.save(reel('tdays'), name='tdays')
     tdays = [r.date for r in c.reel('select * from tdays order by date')]
-
 
     def articles_prets():
         def func(x):
