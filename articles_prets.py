@@ -2,11 +2,10 @@
 add previous returns(HPR) to articles_cnt
 """
 from pydwork.sqlplus import *
-from pydwork.util import mpairs
+from pydwork.util import mpairs, isnum, pmap
 import math
 import bisect
 from itertools import islice
-from helpers import isnum
 
 set_workspace('workspace')
 
@@ -80,7 +79,7 @@ def fillin(rs, tdays):
     return result
 
 
-
+# you need two databases since you have to work on both at the same time
 with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
     def daily():
@@ -91,6 +90,8 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
             yield r
 
     c1.save(daily)
+
+    c1.save(reel('ff4d'), name='ff4d')
 
     firms1 = c.reel(
     """
@@ -115,14 +116,14 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
     tdays = [r.date for r in c.reel('select * from tdays order by date')]
 
-    def articles_prets():
-        for rs1, rs2 in mpairs(firms1, firms2,
-                               lambda rs: rs[0].ticker,
-                               lambda rs: rs[0].tsymbol):
 
+    def articles_prets():
+        def func(x):
+            rs1, rs2 = x
             print(rs2[0].tsymbol)
             rs2 = fillin(rs2, tdays)
 
+            result = []
             for ars in Rows(rs1).group('id_article'):
                 # very rarely, but some articles do not have main,
                 # I have no idea where it came from
@@ -140,7 +141,8 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                 ret_0 = bhr(rs2, idx, idx + 1)
                 logsize = compute_logsize(rs2, idx)
 
-                periods = [1, 2, 3, 5, 10, 20, 60, 125, 250]
+                periods = [1, 2, 3, 5, 10, 20, 60, 125, 250, 500, 750,
+                           1000, 1250]
 
                 rets_prev = [bhr(rs2, idx - x, idx) for x in periods]
                 rets_next = [bhr(rs2, idx + 1, idx + 1 + x) for x in periods]
@@ -170,9 +172,30 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                     for prd, x in zip(periods, tnover_next):
                         setattr(r1, 'tnover_n' + str(prd), x)
 
-                    yield r1
+                    result.append(r1)
+            return result
 
-    # c.save(articles_prets, overwrite=True)
-    c.show('articles_prets')
+
+        for rs in pmap(func, mpairs(firms1, firms2,
+                                    lambda rs: rs[0].ticker,
+                                    lambda rs: rs[0].tsymbol),
+                       nworkers=2,
+                       chunksize=5):
+            yield from rs
+
+    c.save(articles_prets, overwrite=True)
     c.write('articles_prets', filename='articles_prets')
+    # c.show('articles_prets')
+#    c.write("""
+#            select * from articles_prets
+#            where date>'20151220' and ticker='MSFT'
+#            and id_comment=0 limit 3
+#           """, filename='sample_articles_prets')
+#     c1.write(
+#         """
+#         select * from daily
+#         where tsymbol='IBM' or tsymbol='MSFT'
+#         order by ticker, date
+#         """, filename='daily_sample')
+#
 
