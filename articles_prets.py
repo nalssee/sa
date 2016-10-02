@@ -14,6 +14,9 @@ set_workspace('workspace')
 # the reason why I pass col is because you may want to get
 # market value weighted return or just raw return
 def bhr(rs, start, end, col='ret'):
+    if start < 0 or end < 0:
+        return ''
+
     result = 1
     cnt = 0
     for r in islice(rs, start, end):
@@ -31,6 +34,9 @@ def bhr(rs, start, end, col='ret'):
         return ''
 
 def turnover(rs, start, end):
+    if start < 0 or end < 0:
+        return ''
+
     result = 0
     cnt = 0
     for r in islice(rs, start, end):
@@ -95,6 +101,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
     c.save(reel('articles_cnt'), name='articles_cnt')
 
+
     firms1 = c.reel(
     """
         select * from articles_cnt
@@ -116,12 +123,14 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
         order by tsymbol, date
     """, group='tsymbol')
 
+
+
     c.save(reel('tdays'), name='tdays')
     tdays = [r.date for r in c.reel('select * from tdays order by date')]
 
     def articles_prets():
-        def func(x):
-            rs1, rs2 = x
+        def func(rs_tuple):
+            rs1, rs2 = rs_tuple
             print(rs2[0].tsymbol)
             rs2 = fillin(rs2, tdays)
 
@@ -137,9 +146,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
                 main_date = main_article.date
 
-                # print(main_date)
                 idx = bisect.bisect_left(tdays, main_date)
-
                 ret_0 = bhr(rs2, idx, idx + 1)
                 logsize = compute_logsize(rs2, idx)
 
@@ -181,12 +188,13 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
         for rs in pmap(func, mpairs(firms1, firms2,
                                     lambda rs: rs[0].ticker,
                                     lambda rs: rs[0].tsymbol),
-                       nworkers=3,
+                       nworkers=2,
                        chunksize=1):
             yield from rs
 
     c.save(articles_prets, overwrite=True)
     c.write('articles_prets', filename='articles_prets')
+    # c.show('articles_prets')
 
     # c.show('articles_prets')
 #    c.write("""
