@@ -93,6 +93,8 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
     c1.save(reel('ff4d'), name='ff4d')
 
+    c.save(reel('articles_cnt'), name='articles_cnt')
+
     firms1 = c.reel(
     """
         select * from articles_cnt
