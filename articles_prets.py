@@ -185,6 +185,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
 
     c.save(articles_prets, overwrite=True)
     c.write('articles_prets', filename='articles_prets')
+
     # c.show('articles_prets')
 #    c.write("""
 #            select * from articles_prets
