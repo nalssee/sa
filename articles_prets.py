@@ -12,6 +12,8 @@ import statsmodels.api as sm
 
 set_workspace('workspace')
 
+
+
 # buy and hold return, not in percentage
 # if it is not consecutive, then just return ''
 # the reason why I pass col is because you may want to get
@@ -163,6 +165,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
         from daily as a
         left join ff4d as b
         on a.date = b.date
+
         """)
 
     c.save(reel('articles_cnt'), name='articles_cnt')
