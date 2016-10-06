@@ -284,8 +284,8 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
         for rs in pmap(func, mpairs(firms1, firms2,
                                     lambda rs: rs[0].ticker,
                                     lambda rs: rs[0].tsymbol),
-                       nworkers=2,
-                       chunksize=1):
+                       nworkers=3,
+                       chunksize=3):
             yield from rs
 
     # c.drop('articles_prets')

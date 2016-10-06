@@ -193,8 +193,6 @@ with dbopen('space.db') as c:
 
 
 
-
-
     #
     print('y var: avg daily turn over(trading vol / shrout) (AFTER article)')
     for xvar in ['diffop1', 'diffop2']:
