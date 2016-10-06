@@ -1,53 +1,30 @@
 from pydwork.sqlplus import *
 from pydwork.util import isnum, pmap
 
-import statistics as st
-from itertools import islice
-prod = 1
-n = 0
+set_workspace('workspace')
 
-xs = [
-0.009484,
-0.008491,
--0.002687,
-0.00503,
-0.010724
-]
+with dbopen('space.db') as c:
+#    c.show(
+#        """
+#        select avg(ret
+#        """
+#    )
+    c.show(
+        """
+        select avg(ret_0),
+        avg(ret_less2_p1), avg(ret_less4_p1), avg(ret_p1),
+        avg(ret_less2_p2), avg(ret_less4_p2), avg(ret_p2),
+        avg(ret_less2_p3), avg(ret_less4_p3), avg(ret_p3),
+        avg(ret_less2_p250), avg(ret_less4_p250), avg(ret_p250)
 
 
-for x in islice(xs, 2):
-    prod *= x + 1
-    n += 1
-print(prod, n)
-print(prod ** (1 / n) - 1)
 
-vol = [
-5333767,
-5143787,
-4238546,
-4345474,
-4089539,
-10026106,
-5617475,
-4263828,
-5164916,
-1495226
-]
-shrout = [
-970110,
-970110,
-970110,
-970110,
-970110,
-970110,
-970110,
-970110,
-970110,
-970110
-]
-sum = 0
-n = 0
-for v, s in islice(zip(reversed(vol), reversed(shrout)), 3):
-    sum += v / s
-    n += 1
-print(sum / n)
+        from articles_prets
+        """)
+
+#with dbopen('space1.db') as c1:
+#    c1.show(
+#        """
+#        select avg(ret),
+#        """
+#    )

@@ -2,17 +2,21 @@ from pydwork.sqlplus import *
 from pydwork.util import yyyymmdd
 import statistics as st
 
+
 set_workspace('workspace')
 
+# difference of opinion
+# i.e., standard deviation
 def diffop(rs):
     if len(rs) < 2:
         return ''
     # stdev of net negative ratios
     return st.stdev((r.nneg - r.npos) / r.ntot for r in rs)
 
+# articles_prets needed
 with dbopen('space.db') as c:
-    # c.drop('articles_prets')
-    c.save(reel('articles_prets'), name='articles_prets')
+
+    # c.save(reel('articles_prets'), name='articles_prets')
     # c.show('select count(*) from articles_prets')
     def datasetB():
         for rs in c.reel(
@@ -23,6 +27,7 @@ with dbopen('space.db') as c:
             """, group='id_article'):
             try:
                 # main article
+                # rarely, but a few articles do not have main.
                 mrow = next(x for x in rs if x.type == 'main')
             except:
                 continue
@@ -45,15 +50,10 @@ with dbopen('space.db') as c:
 
             yield mrow
 
-    # c.save(datasetB, overwrite=True)
-    c.show('select count(*) from datasetB')
-
-
-
-
-
-
-
+    c.drop('datasetB')
+    c.save(datasetB)
+    # c.show('datasetB')
+    # c.show('select count(*) from datasetB')
 
 
 

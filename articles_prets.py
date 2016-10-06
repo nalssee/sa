@@ -7,6 +7,9 @@ import math
 import bisect
 from itertools import islice
 
+import statsmodels.api as sm
+
+
 set_workspace('workspace')
 
 # buy and hold return, not in percentage
@@ -32,6 +35,54 @@ def bhr(rs, start, end, col='ret'):
     # not enough rows
     else:
         return ''
+
+
+# add ret_less2 and ret_less4
+# ret_less2: 모멘텀과 마켓 갖고 regression 돌린 나머지 찌꺼기
+# ret_less4: 4 factor 제거한 찌꺼기
+def ret_less(rs, beg, end):
+    if beg < 0:
+        return
+
+    Y = []
+    X = []
+    rs1 = []
+    for r in islice(rs, beg, end):
+        if r.ret == '':
+            continue
+        Y.append(r.ret)
+        X.append([r.mkt_rf, r.mom])
+        rs1.append(r)
+
+    # 250 is the half of the whole period, admittedly somewhat arbitrary
+    if len(Y) < 251:
+        return
+
+    result = sm.OLS(Y, sm.add_constant(X)).fit()
+    intercept = result.params[0]
+    for resid, r in zip(result.resid, rs1):
+        r.ret_less2 = intercept + resid
+
+
+    Y = []
+    X = []
+    rs1 = []
+    for r in islice(rs, beg, end):
+        if r.ret == '':
+            continue
+        Y.append(r.ret)
+        X.append([r.mkt_rf, r.smb, r.hml, r.mom])
+        rs1.append(r)
+
+    # 250 is the half of the whole period, admittedly somewhat arbitrary
+    if len(Y) < 251:
+        return
+
+    result = sm.OLS(Y, sm.add_constant(X)).fit()
+    intercept = result.params[0]
+    for resid, r in zip(result.resid, rs1):
+        r.ret_less4 = intercept + resid
+
 
 def turnover(rs, start, end):
     if start < 0 or end < 0:
@@ -87,7 +138,7 @@ def fillin(rs, tdays):
 
 # you need two databases since you have to work on both at the same time
 with dbopen('space.db') as c, dbopen('space1.db') as c1:
-
+    c1.save(reel('ff4d'), name='ff4d')
     def daily():
         for r in reel('daily'):
             r.permno = 'A' + r.permno
@@ -95,27 +146,40 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
             r.cusip = 'A' + r.cusip
             yield r
 
+    # c1.drop('daily')
     c1.save(daily)
+    # print('daily saved')
+    # c1.drop('daily1')
+    c1.run(
+        """
+        create table if not exists daily1 as
+        select a.*,
+        b.mkt_rf / 100 as mkt_rf,
+        b.smb / 100 as smb,
+        b.hml / 100 as hml,
+        b.mom / 100 as mom,
+        b.rf / 100 as rf
 
-    c1.save(reel('ff4d'), name='ff4d')
+        from daily as a
+        left join ff4d as b
+        on a.date = b.date
+        """)
 
     c.save(reel('articles_cnt'), name='articles_cnt')
-
 
     firms1 = c.reel(
     """
         select * from articles_cnt
         where
         date <= 20151231
+
         order by ticker, id_article, id_comment
     """, group='ticker')
 
     firms2 = c1.reel(
     """
-        select * from daily
-        where
-
-        tsymbol != '' and
+        select * from daily1
+        where tsymbol != '' and
         (exchcd = 1 or exchcd = 2 or exchcd = 3) and
         (shrcd = 10 or shrcd = 11) and
         isnum(ret) and ret > -1
@@ -134,6 +198,11 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
             print(rs2[0].tsymbol)
             rs2 = fillin(rs2, tdays)
 
+            # default values for rs2
+            for r in rs2:
+                r.ret_less2 = ''
+                r.ret_less4 = ''
+
             result = []
             for ars in Rows(rs1).group('id_article'):
                 # very rarely, but some articles do not have main,
@@ -150,11 +219,23 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                 ret_0 = bhr(rs2, idx, idx + 1)
                 logsize = compute_logsize(rs2, idx)
 
-                periods = [1, 2, 3, 5, 10, 20, 60, 125, 250, 500, 750,
-                           1000, 1250]
+                periods = [1, 2, 3, 5, 10, 20, 60, 125, 250]
+
+                # add ret_less2, ret_less4
+                ret_less(rs2, idx - 250, idx + 251)
 
                 rets_prev = [bhr(rs2, idx - x, idx) for x in periods]
                 rets_next = [bhr(rs2, idx + 1, idx + 1 + x) for x in periods]
+
+                rets_less2_prev = [bhr(rs2, idx - x, idx, 'ret_less2')
+                                   for x in periods]
+                rets_less2_next = [bhr(rs2, idx + 1, idx + 1 + x, 'ret_less2')
+                                   for x in periods]
+
+                rets_less4_prev = [bhr(rs2, idx - x, idx, 'ret_less4')
+                                   for x in periods]
+                rets_less4_next = [bhr(rs2, idx + 1, idx + 1 + x, 'ret_less4')
+                                   for x in periods]
 
                 vwrets_prev = [bhr(rs2, idx - x, idx, 'vwretd') for x in periods]
                 vwrets_next = [bhr(rs2, idx + 1, idx + 1 + x, 'vwretd') for x in periods]
@@ -165,6 +246,17 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                 for r1 in ars:
                     r1.ret_0 = ret_0
                     r1.logsize = logsize
+
+                    for prd, x in zip(periods, rets_less2_prev):
+                        setattr(r1, 'ret_less2_p' + str(prd), x)
+                    for prd, x in zip(periods, rets_less2_next):
+                        setattr(r1, 'ret_less2_n' + str(prd), x)
+
+                    for prd, x in zip(periods, rets_less4_prev):
+                        setattr(r1, 'ret_less4_p' + str(prd), x)
+                    for prd, x in zip(periods, rets_less4_next):
+                        setattr(r1, 'ret_less4_n' + str(prd), x)
+
 
                     for prd, x in zip(periods, rets_prev):
                         setattr(r1, 'ret_p' + str(prd), x)
@@ -182,6 +274,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                         setattr(r1, 'tnover_n' + str(prd), x)
 
                     result.append(r1)
+
             return result
 
 
@@ -192,21 +285,7 @@ with dbopen('space.db') as c, dbopen('space1.db') as c1:
                        chunksize=1):
             yield from rs
 
-    c.save(articles_prets, overwrite=True)
-    c.write('articles_prets', filename='articles_prets')
-    # c.show('articles_prets')
-
-    # c.show('articles_prets')
-#    c.write("""
-#            select * from articles_prets
-#            where date>'20151220' and ticker='MSFT'
-#            and id_comment=0 limit 3
-#           """, filename='sample_articles_prets')
-#     c1.write(
-#         """
-#         select * from daily
-#         where tsymbol='IBM' or tsymbol='MSFT'
-#         order by ticker, date
-#         """, filename='daily_sample')
-#
-
+    # c.drop('articles_prets')
+    c.save(articles_prets)
+    # c.write('articles_prets', filename='articles_prets')
+    c.show('articles_prets')
